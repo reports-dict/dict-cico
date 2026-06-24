@@ -22,6 +22,9 @@ const TELEGRAM_CHUNK_ROW_COUNT = 40;
 const MODE_REGULAR = 'regular';
 const MODE_OUT = 'out';
 
+const AUTO_SEND_TIMES = ['10:00', '17:30', '22:00', '05:30'];
+const AUTO_SEND_TOLERANCE_MINUTES = 15;
+
 const DIRECTION_FILTER_SENTINEL = '/*__DIRECTION_FILTER__*/';
 
 const DIRECTION_FILTER_REGULAR = <<<'SQL'
@@ -96,7 +99,10 @@ function parseCliOptions(): ?array
     $opts = getopt('', ['start:', 'end::', 'mode::']);
 
     if (!isset($opts['start']) || $opts['start'] === '') {
-        cliFail('Missing required --start=HH:MM argument.');
+        if (isset($opts['mode']) || isset($opts['end'])) {
+            cliFail('--mode/--end require --start to also be set; omit all three for auto-detected window and mode.');
+        }
+        return [];
     }
 
     $mode = $opts['mode'] ?? MODE_REGULAR;
@@ -122,25 +128,51 @@ function resolveStartOfDay(DateTime $reference, string $hhmm): DateTime
     return $result;
 }
 
+function resolveAutoWindow(DateTime $now): array
+{
+    $hour = (int) $now->format('H');
+
+    if ($hour >= 7 && $hour < 16) {
+        return [resolveStartOfDay($now, '07:00'), MODE_REGULAR];
+    }
+    if ($hour >= 16 && $hour < 19) {
+        return [resolveStartOfDay($now, '16:00'), MODE_OUT];
+    }
+    if ($hour >= 19) {
+        return [resolveStartOfDay($now, '19:00'), MODE_REGULAR];
+    }
+    if ($hour < 4) {
+        $start = resolveStartOfDay($now, '19:00');
+        $start->modify('-1 day');
+        return [$start, MODE_REGULAR];
+    }
+
+    return [resolveStartOfDay($now, '04:00'), MODE_OUT];
+}
+
+function isNearAutoSendTime(DateTime $now): bool
+{
+    foreach (AUTO_SEND_TIMES as $hhmm) {
+        $anchor = resolveStartOfDay($now, $hhmm);
+        $diffMinutes = abs($now->getTimestamp() - $anchor->getTimestamp()) / 60;
+        if ($diffMinutes <= AUTO_SEND_TOLERANCE_MINUTES) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function resolveReportWindow(?array $cliOptions, DateTime $now): array
 {
-    if ($cliOptions !== null) {
+    if (isset($cliOptions['start'])) {
         $start = resolveStartOfDay($now, $cliOptions['start']);
         $end = $cliOptions['end'] === 'now' ? clone $now : resolveStartOfDay($now, $cliOptions['end']);
         return [$start, $end, $cliOptions['mode'], true];
     }
 
-    $hour = (int) $now->format('H');
-    if ($hour >= 7 && $hour < 19) {
-        $start = resolveStartOfDay($now, '07:00');
-    } else {
-        $start = resolveStartOfDay($now, '19:00');
-        if ($hour < 7) {
-            $start->modify('-1 day');
-        }
-    }
-
-    return [$start, clone $now, MODE_REGULAR, false];
+    [$start, $mode] = resolveAutoWindow($now);
+    $isAutomated = $cliOptions !== null && isNearAutoSendTime($now);
+    return [$start, clone $now, $mode, $isAutomated];
 }
 
 function applyDirectionFilter(string $sql, string $mode): string
@@ -407,6 +439,14 @@ function renderReportHtml(
 $now = new DateTime('now');
 $cliOptions = parseCliOptions();
 [$windowStart, $windowEnd, $mode, $isAutomated] = resolveReportWindow($cliOptions, $now);
+
+error_log(sprintf(
+    'Resolved report window: %s to %s, mode=%s, automated=%s',
+    $windowStart->format('Y-m-d H:i:s'),
+    $windowEnd->format('Y-m-d H:i:s'),
+    $mode,
+    $isAutomated ? 'yes' : 'no'
+));
 
 $result = null;
 $errorMessage = null;

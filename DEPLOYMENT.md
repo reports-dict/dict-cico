@@ -48,7 +48,7 @@ php bigquery_report.php --start=04:00 --end=now --mode=out
 php bigquery_report.php --start=16:00 --end=now --mode=out
 ```
 
-For each, confirm: exits 0, a JPEG lands in `images/`, and a photo/album actually arrives in the Telegram channel.
+For each, confirm: exits 0, a JPEG lands in `images/`, and a photo/album actually arrives in the Telegram channel. These explicit-flag invocations always send, regardless of the current wall-clock time — useful for forcing any of the 4 windows/modes on demand.
 
 Watch for network egress issues — the server needs outbound HTTPS to `googleapis.com` and `api.telegram.org`. Also worth checking whether the bundled `cacert.pem` is even necessary on this network — that file exists because the Windows dev machine sits behind something doing TLS interception; Ubuntu's own CA store (`ca-certificates` package) might already be fine without it. If a request fails with a cert error, that's the first thing to check.
 
@@ -62,14 +62,16 @@ crontab -e
 
 ```cron
 CRON_TZ=Asia/Manila
-0 10 * * * /usr/bin/php /path/to/cico/bigquery_report.php --start=07:00 --end=now --mode=regular >> /path/to/cico/cron.log 2>&1
-0 22 * * * /usr/bin/php /path/to/cico/bigquery_report.php --start=19:00 --end=now --mode=regular >> /path/to/cico/cron.log 2>&1
-30 5 * * * /usr/bin/php /path/to/cico/bigquery_report.php --start=04:00 --end=now --mode=out >> /path/to/cico/cron.log 2>&1
-30 17 * * * /usr/bin/php /path/to/cico/bigquery_report.php --start=16:00 --end=now --mode=out >> /path/to/cico/cron.log 2>&1
+0 10 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
+0 22 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
+30 5 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
+30 17 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
 ```
+
+No flags needed — run with no arguments, the script self-detects the window and mode from the current wall-clock time (see `resolveAutoWindow()`/`isNearAutoSendTime()` in `bigquery_report.php`). It only actually saves an image and sends to Telegram when invoked within 15 minutes of one of these 4 scheduled times; a bare run at any other time (e.g. manual debugging) just resolves the window and renders, without sending.
 
 Use full absolute paths everywhere — cron's environment/PATH is minimal. Redirecting to a log file matters since `error_log()` calls in the script otherwise go to PHP's default log destination, which may not be where you expect on a fresh install.
 
 ## 7. Let it run once unattended, then check
 
-After the next scheduled fire time, check `cron.log` for any `error_log` output and confirm `images/` got a new file and Telegram got a message — that closes the loop on whether the whole pipeline survives unattended.
+After the next scheduled fire time, check `cron.log` for the "Resolved report window" line and confirm: the window/mode match the expected slot for that time, `automated=yes`, `images/` got a new file, and Telegram got a message — that closes the loop on whether the whole pipeline survives unattended.
