@@ -334,7 +334,9 @@ function renderReportHtml(
     string $mode,
     ?string $errorMessage,
     ?int $partNumber = null,
-    ?int $totalParts = null
+    ?int $totalParts = null,
+    int $rowOffset = 0,
+    ?int $totalRowCount = null
 ): string {
     ob_start();
     ?>
@@ -353,6 +355,7 @@ function renderReportHtml(
     tr:nth-child(even) { background: #f5f5f5; }
     .error { color: #b00020; font-weight: bold; }
     .empty { color: #666; font-style: italic; }
+    .row-num { width: 2.5em; text-align: right; }
 </style>
 </head>
 <body>
@@ -371,14 +374,16 @@ function renderReportHtml(
     <table>
         <thead>
             <tr>
+                <th class="row-num">#</th>
                 <?php foreach ($fields as $field): ?>
                     <th><?= htmlspecialchars($field) ?></th>
                 <?php endforeach; ?>
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($rows as $row): ?>
+            <?php foreach ($rows as $localIndex => $row): ?>
                 <tr>
+                    <td class="row-num"><?= $rowOffset + $localIndex + 1 ?></td>
                     <?php foreach ($fields as $field): ?>
                         <td><?= htmlspecialchars((string) ($row[$field] ?? '')) ?></td>
                     <?php endforeach; ?>
@@ -386,7 +391,11 @@ function renderReportHtml(
             <?php endforeach; ?>
         </tbody>
     </table>
-    <div class="meta"><?= count($rows) ?> row(s)</div>
+    <div class="meta">
+        <?= count($rows) ?> row(s) shown<?php if ($totalParts !== null && $totalParts > 1): ?>
+            (rows <?= $rowOffset + 1 ?>&ndash;<?= $rowOffset + count($rows) ?> of <?= $totalRowCount ?> total)
+        <?php endif; ?>
+    </div>
 <?php endif; ?>
 
 </body>
@@ -444,10 +453,12 @@ if ($isAutomated) {
 
     $rowChunks = empty($result['rows']) ? [[]] : array_chunk($result['rows'], TELEGRAM_CHUNK_ROW_COUNT);
     $totalChunks = count($rowChunks);
+    $totalRowCount = count($result['rows'] ?? []);
 
     $chunkImagePaths = [];
     foreach ($rowChunks as $i => $chunkRows) {
-        $chunkHtml = renderReportHtml($result['fields'] ?? [], $chunkRows, $now, $windowStart, $windowEnd, $mode, $errorMessage, $i + 1, $totalChunks);
+        $rowOffset = $i * TELEGRAM_CHUNK_ROW_COUNT;
+        $chunkHtml = renderReportHtml($result['fields'] ?? [], $chunkRows, $now, $windowStart, $windowEnd, $mode, $errorMessage, $i + 1, $totalChunks, $rowOffset, $totalRowCount);
         $chunkImagePath = tempnam(sys_get_temp_dir(), 'tg_chunk_') . '.jpg';
         if (saveHtmlAsImage($chunkHtml, $chunkImagePath)) {
             $chunkImagePaths[] = $chunkImagePath;
