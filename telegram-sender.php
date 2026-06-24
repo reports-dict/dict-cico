@@ -4,9 +4,7 @@ declare(strict_types=1);
 // ----------------------
 // Configuration
 // ----------------------
-const TELEGRAM_BOT_TOKEN = '8286346056:AAFyzbWH5i_jrPOL8iGFaFZMViDYea7jolY';
-const TELEGRAM_CHAT_ID = '-5403710684'; // Channel chat id
-// const TELEGRAM_CHAT_ID = '-5248688686'; // TEST Channel chat id
+require_once __DIR__ . '/telegram-config.php';
 const TELEGRAM_CA_BUNDLE_PATH = __DIR__ . '/cacert.pem';
 
 // ----------------------

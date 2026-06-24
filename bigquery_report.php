@@ -13,7 +13,9 @@ const CREDENTIALS_PATH = __DIR__ . '/BigQueryCredentials.JSON';
 const QUERY_PATH = __DIR__ . '/query.sql';
 const CA_BUNDLE_PATH = __DIR__ . '/cacert.pem';
 const BIGQUERY_SCOPE = 'https://www.googleapis.com/auth/bigquery';
-const WKHTMLTOIMAGE_PATH = 'C:\Program Files\wkhtmltopdf\bin\wkhtmltoimage.exe';
+const WKHTMLTOIMAGE_PATH = PHP_OS_FAMILY === 'Windows'
+    ? 'C:\Program Files\wkhtmltopdf\bin\wkhtmltoimage.exe'
+    : '/usr/bin/wkhtmltoimage';
 const IMAGES_DIR = __DIR__ . '/images';
 const TELEGRAM_CHUNK_ROW_COUNT = 40;
 
