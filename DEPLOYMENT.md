@@ -54,18 +54,26 @@ Watch for network egress issues — the server needs outbound HTTPS to `googleap
 
 ## 6. Set up cron
 
-Cron needs to fire at Manila wall-clock times regardless of the server's system timezone. Easiest: use `CRON_TZ` instead of changing the whole server's timezone:
+The Ubuntu cron build on this server (3.0pl1) does **not** support `CRON_TZ`. Convert the Manila send times to UTC manually (Manila is UTC+8):
+
+| Manila | UTC |
+|--------|-----|
+| 10:00 AM | 02:00 |
+| 5:30 PM | 09:30 |
+| 10:00 PM | 14:00 |
+| 5:30 AM | 21:30 (previous UTC day) |
 
 ```bash
 crontab -e
 ```
 
 ```cron
-CRON_TZ=Asia/Manila
-0 10 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
-0 22 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
-30 5 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
-30 17 * * * /usr/bin/php /path/to/cico/bigquery_report.php >> /path/to/cico/cron.log 2>&1
+# Times are UTC. Manila = UTC+8.
+# 02:00=10:00AM, 09:30=5:30PM, 14:00=10:00PM, 21:30=5:30AM(next day)
+0 2 * * * /usr/bin/php /var/www/dict-cico/bigquery_report.php >> /var/www/dict-cico/cron.log 2>&1
+30 9 * * * /usr/bin/php /var/www/dict-cico/bigquery_report.php >> /var/www/dict-cico/cron.log 2>&1
+0 14 * * * /usr/bin/php /var/www/dict-cico/bigquery_report.php >> /var/www/dict-cico/cron.log 2>&1
+30 21 * * * /usr/bin/php /var/www/dict-cico/bigquery_report.php >> /var/www/dict-cico/cron.log 2>&1
 ```
 
 No flags needed — run with no arguments, the script self-detects the window and mode from the current wall-clock time (see `resolveAutoWindow()`/`isNearAutoSendTime()` in `bigquery_report.php`). It only actually saves an image and sends to Telegram when invoked within 15 minutes of one of these 4 scheduled times; a bare run at any other time (e.g. manual debugging) just resolves the window and renders, without sending.
